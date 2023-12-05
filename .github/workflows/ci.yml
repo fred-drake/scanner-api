@@ -18,6 +18,7 @@ jobs:
             target: aarch64-apple-darwin
             bin: scanner-api
             name: scanner-api-Darwin-aarch64.tar.gz
+            skip_tests: true
         toolchain: [stable, beta, nightly]
     steps:
       - uses: actions/checkout@v3
