@@ -32,40 +32,37 @@ async fn scan_endpoint(data: Data<AppState>) -> HttpResponse {
         return HttpResponse::BadRequest().body("Child process already running");
     }
 
-    let mut guard = data.child_process.lock().unwrap();
+    let response: Option<HttpResponse> = if cfg!(test) {
+        handle_command(data, Command::new("sleep").args(["15"]))
+    } else {
+        handle_command(
+            data,
+            Command::new("epsonscan2").args(["-s", "UserSettings.SF2"]),
+        )
+    };
 
+    response.unwrap_or(
+        HttpResponse::InternalServerError().body("Process should have been empty but wasn't"),
+    )
+}
+
+fn handle_command(data: Data<AppState>, command: &mut Command) -> Option<HttpResponse> {
+    let mut guard = data.child_process.lock().unwrap();
     if guard.is_none() {
-        // Spawn the child process
-        info!("Spawning scan process...");
-        return if cfg!(test) {
-            match Command::new("sleep").args(["15"]).spawn() {
-                Ok(child) => {
-                    *guard = Some(child);
-                    HttpResponse::Ok().body("Child process started")
-                }
-                Err(e) => {
-                    error!("Failure starting scan process: {}", e);
-                    HttpResponse::InternalServerError().body("Failed to start child process")
-                }
-            }
-        } else {
-            match Command::new("epsonscan2")
-                .args(["-s", "ES-400", "UserSettings.SF2"])
-                .spawn()
-            {
-                Ok(child) => {
-                    *guard = Some(child);
-                    HttpResponse::Ok().body("Child process started")
-                }
-                Err(e) => {
-                    error!("Failure starting scan process: {}", e);
-                    HttpResponse::InternalServerError().body("Failed to start child process")
-                }
-            }
-        };
+        return None;
     }
 
-    HttpResponse::InternalServerError().body("Process should have been empty but wasn't")
+    info!("Spawning scan process...");
+    match command.spawn() {
+        Ok(child) => {
+            *guard = Some(child);
+            Some(HttpResponse::Ok().body("Child process started"))
+        }
+        Err(e) => {
+            error!("Failure starting scan process: {}", e);
+            Some(HttpResponse::InternalServerError().body("Failed to start child process"))
+        }
+    }
 }
 
 #[tracing::instrument]
